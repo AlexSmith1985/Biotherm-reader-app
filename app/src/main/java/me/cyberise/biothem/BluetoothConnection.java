@@ -4,15 +4,20 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.graphics.Color;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.text.DateFormat;
+import java.util.Date;
 import java.util.Set;
 import java.util.UUID;
 
@@ -127,8 +132,20 @@ public class BluetoothConnection{
                     statusField.setText(R.string.disconnected);
                     statusField.setTextColor(Color.RED);
                 }
+                if(ui.logging_preference){
+                    String filename = Environment.getExternalStorageDirectory()+"/implant.log";
+                    File yourFile = new File(filename);
+                    if(!yourFile.exists()) {
+                        yourFile.createNewFile();
+                    }
+                    FileOutputStream fos = ui.getApplicationContext().openFileOutput(filename, ui.getApplicationContext().MODE_APPEND);
+                    String currentDateTimeString = DateFormat.getDateTimeInstance().format(new Date());
+                    fos.write((currentDateTimeString+":" + currentValue+"\n").getBytes());
+                    fos.close();
+                }
                 TextView valueField = ((TextView)ui.findViewById(R.id.tempText));
                 valueField.setText(currentValue);
+                //currentValue="";
             } catch (Exception e){
                 //not able to update status, probably UI is closed
                 int i = 0;

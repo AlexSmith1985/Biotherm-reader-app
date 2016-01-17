@@ -4,7 +4,9 @@ import android.app.FragmentManager;
 import android.app.FragmentTransaction;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.preference.Preference;
 import android.preference.PreferenceFragment;
 import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
@@ -25,6 +27,7 @@ import com.caverock.androidsvg.SVGParseException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
@@ -35,12 +38,22 @@ import java.util.UUID;
 
 
 public class MainActivity extends ActionBarActivity {
+
+    //Settings
+    static boolean FahrenheitCelsius = false;
+    static int interval = 0;
+    static String bt_name = "";
+    static String bt_pass = "";
+    static float calibration_factor = 0;
+    static boolean logging_preference = false;
+    static Context context;
+
     RelativeLayout mainPanel;
     boolean inSettings = false;
     static float offset = new Float(0.5);
     Random random = new Random();
     HashMap<SVG.Path, Float> paths = new HashMap<SVG.Path, Float>();
-    BluetoothConnection connection = null;
+    static BluetoothConnection connection = null;
     private void walk(SVG.SvgObject root){
         if(root instanceof SVG.SvgConditionalContainer){
             for(SVG.SvgObject child: ((SVG.SvgConditionalContainer)root).children){
@@ -64,6 +77,7 @@ public class MainActivity extends ActionBarActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        context = getApplicationContext();
         setContentView(R.layout.activity_main);
 
         BluetoothConnection.ui = this;
@@ -129,7 +143,7 @@ public class MainActivity extends ActionBarActivity {
 
 
     public void Exit(String message){
-        Context context = getApplicationContext();
+
         int duration = Toast.LENGTH_SHORT;
 
         Toast toast = Toast.makeText(context, message, duration);
@@ -145,7 +159,7 @@ public class MainActivity extends ActionBarActivity {
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);
     }
-    public static class PrefsFragment extends PreferenceFragment {
+    public static class PrefsFragment extends PreferenceFragment  implements SharedPreferences.OnSharedPreferenceChangeListener{
 
         @Override
         public void onCreate(Bundle savedInstanceState) {
@@ -153,6 +167,83 @@ public class MainActivity extends ActionBarActivity {
 
             // Load the preferences from an XML resource
             addPreferencesFromResource(R.xml.preference);
+        }
+        @Override
+        public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+
+            if (key.equals("username")) {
+                Preference pref = findPreference(key);
+
+                pref.setSummary(sharedPreferences.getString(key, ""));
+            }
+            try {
+                if (connection.connected){
+                    if (key.equals("FahrenheitCelsius")) {
+                        FahrenheitCelsius = sharedPreferences.getBoolean(key,false);
+
+                        byte[] data = "setxx\n".getBytes();
+                        data[3] = new BigInteger("5").toByteArray()[0];
+                        data[4] = new BigInteger((FahrenheitCelsius?0x2:0x1)+"").toByteArray()[0];
+                        connection.outStream.write(data);
+                        connection.outStream.flush();
+                    }
+
+                    if (key.equals("interval")) {
+                        interval = Integer.decode(sharedPreferences.getString(key,"0"));
+                        byte[] data = "setxx\n".getBytes();
+                        data[3] = new BigInteger("3").toByteArray()[0];
+                        data[4] = new BigInteger((interval+1)+"").toByteArray()[0];
+                        connection.outStream.write(data);
+                        connection.outStream.flush();
+                    }
+                    if (key.equals("bt_name")) {
+                        bt_name = sharedPreferences.getString(key,"");
+                        byte[] data = ("btAT+NAME"+bt_name+"\n").getBytes();
+
+                        connection.outStream.write(data);
+                        connection.outStream.flush();
+                    }
+                    if (key.equals("bt_pass")) {
+                        bt_pass = sharedPreferences.getString(key,"");
+                        byte[] data = ("btAT+PIN"+bt_name+"\n").getBytes();
+
+                        connection.outStream.write(data);
+                        connection.outStream.flush();
+                    }
+                    if (key.equals("calibration_factor")) {
+                        calibration_factor =  Float.parseFloat(sharedPreferences.getString(key,"0"));
+                        connection.outStream.write(("set"+0x4+new Character((char)(calibration_factor*10))).getBytes());
+                        byte[] data = "setxx\n".getBytes();
+                        data[3] = new BigInteger("4").toByteArray()[0];
+                        data[4] = new BigInteger((calibration_factor*10+1)+"").toByteArray()[0];
+                        connection.outStream.write(data);
+                        connection.outStream.flush();
+                    }
+                } else {
+                    Toast toast = Toast.makeText(context, "Not connected to reader, can't update setting", Toast.LENGTH_SHORT);
+                    toast.show();
+                }
+                if (key.equals("logging_preference")) {
+                    logging_preference = sharedPreferences.getBoolean(key,false);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        @Override
+        public void onResume() {
+            super.onResume();
+            getPreferenceScreen()
+                    .getSharedPreferences()
+                    .registerOnSharedPreferenceChangeListener(this);
+        }
+
+        @Override
+        public void onPause() {
+            super.onPause();
+            getPreferenceScreen()
+                    .getSharedPreferences()
+                    .unregisterOnSharedPreferenceChangeListener(this);
         }
     }
 
