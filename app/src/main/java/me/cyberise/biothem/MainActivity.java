@@ -8,6 +8,7 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.preference.Preference;
 import android.preference.PreferenceFragment;
+import android.preference.PreferenceManager;
 import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
 import android.view.Menu;
@@ -134,6 +135,10 @@ public class MainActivity extends ActionBarActivity {
         background.addView(svgImageView, new LinearLayout.LayoutParams(AbsoluteLayout.LayoutParams.MATCH_PARENT, AbsoluteLayout.LayoutParams.MATCH_PARENT));
 
 
+        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+
+        bt_name = prefs.getString("bt_name", "");
+        logging_preference = prefs.getBoolean("logging_preference", false);
 
         connection = BluetoothConnection.getConnection();
 
@@ -171,13 +176,22 @@ public class MainActivity extends ActionBarActivity {
         @Override
         public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
 
-            if (key.equals("username")) {
-                Preference pref = findPreference(key);
-
-                pref.setSummary(sharedPreferences.getString(key, ""));
-            }
             try {
-                if (connection.connected){
+                if (key.equals("logging_preference")) {
+                    logging_preference = sharedPreferences.getBoolean(key,false);
+                }
+                else if (key.equals("bt_name")) {
+                    bt_name = sharedPreferences.getString(key,"");
+                    if(connection.connected) {
+                        byte[] data = ("btAT+NAME" + bt_name + "\n").getBytes();
+
+
+                        connection.outStream.write(data);
+                        connection.outStream.flush();
+                        connection.btSocket.close();
+                    }
+                }
+                else if (connection.connected){
                     if (key.equals("FahrenheitCelsius")) {
                         FahrenheitCelsius = sharedPreferences.getBoolean(key,false);
 
@@ -196,36 +210,31 @@ public class MainActivity extends ActionBarActivity {
                         connection.outStream.write(data);
                         connection.outStream.flush();
                     }
-                    if (key.equals("bt_name")) {
-                        bt_name = sharedPreferences.getString(key,"");
-                        byte[] data = ("btAT+NAME"+bt_name+"\n").getBytes();
 
+                    if (key.equals("calibration_factor")) {
+                        calibration_factor =  Float.parseFloat(sharedPreferences.getString(key, "0"));
+                        byte[] data = "setxx\n".getBytes();
+                        data[3] = new BigInteger("4").toByteArray()[0];
+                        data[4] = new BigInteger((Math.round(calibration_factor*10)+1)+"").toByteArray()[0];
                         connection.outStream.write(data);
                         connection.outStream.flush();
                     }
                     if (key.equals("bt_pass")) {
                         bt_pass = sharedPreferences.getString(key,"");
-                        byte[] data = ("btAT+PIN"+bt_name+"\n").getBytes();
+                            byte[] data = ("btAT+PIN" + bt_pass + "\n").getBytes();
 
-                        connection.outStream.write(data);
-                        connection.outStream.flush();
-                    }
-                    if (key.equals("calibration_factor")) {
-                        calibration_factor =  Float.parseFloat(sharedPreferences.getString(key,"0"));
-                        connection.outStream.write(("set"+0x4+new Character((char)(calibration_factor*10))).getBytes());
-                        byte[] data = "setxx\n".getBytes();
-                        data[3] = new BigInteger("4").toByteArray()[0];
-                        data[4] = new BigInteger((calibration_factor*10+1)+"").toByteArray()[0];
-                        connection.outStream.write(data);
-                        connection.outStream.flush();
+                            connection.outStream.write(data);
+                            connection.outStream.flush();
+                            connection.btSocket.close();
+
+
                     }
                 } else {
                     Toast toast = Toast.makeText(context, "Not connected to reader, can't update setting", Toast.LENGTH_SHORT);
                     toast.show();
                 }
-                if (key.equals("logging_preference")) {
-                    logging_preference = sharedPreferences.getBoolean(key,false);
-                }
+
+
             } catch (Exception e) {
                 e.printStackTrace();
             }

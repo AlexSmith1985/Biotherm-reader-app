@@ -10,9 +10,11 @@ import android.os.Message;
 import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -60,13 +62,15 @@ public class BluetoothConnection{
         if (pairedDevices.size() > 0) {
             // Loop through paired devices
             for (BluetoothDevice device : pairedDevices) {
-                if (device.getName().contentEquals("HC-05")){
+                if (device.getName().trim().contentEquals(ui.bt_name)){
                     reader = device;
                 }
             }
         }
         if (reader == null){
             //Exit("Reader is not paired");
+            Toast toast = Toast.makeText(ui.getApplicationContext(), "Could not find device, did you change the name?", Toast.LENGTH_LONG);
+            toast.show();
 
         }
 
@@ -108,6 +112,7 @@ public class BluetoothConnection{
                         Log.d(TAG, "read: " + data);
                         data = "";
                     }
+                    currentValue = currentValue.replaceAll("[^\\x00-\\x7F]", "");
                 } catch (Exception e) {
                     connected = false;
                     e.printStackTrace();
@@ -132,16 +137,16 @@ public class BluetoothConnection{
                     statusField.setText(R.string.disconnected);
                     statusField.setTextColor(Color.RED);
                 }
-                if(ui.logging_preference){
+                if(ui.logging_preference && currentValue.length()>0){
                     String filename = Environment.getExternalStorageDirectory()+"/implant.log";
                     File yourFile = new File(filename);
                     if(!yourFile.exists()) {
                         yourFile.createNewFile();
                     }
-                    FileOutputStream fos = ui.getApplicationContext().openFileOutput(filename, ui.getApplicationContext().MODE_APPEND);
+                    FileWriter fw = new FileWriter(yourFile,true);
                     String currentDateTimeString = DateFormat.getDateTimeInstance().format(new Date());
-                    fos.write((currentDateTimeString+":" + currentValue+"\n").getBytes());
-                    fos.close();
+                    fw.write((currentDateTimeString+":" + currentValue+"\n"));
+                    fw.close();
                 }
                 TextView valueField = ((TextView)ui.findViewById(R.id.tempText));
                 valueField.setText(currentValue);
@@ -158,7 +163,7 @@ public class BluetoothConnection{
         try {
             btSocket = reader.createRfcommSocketToServiceRecord(MY_UUID);
 
-        } catch (IOException e) {
+        } catch (Exception e) {
             //odd not sure what happened, try again
         }
 
@@ -168,10 +173,10 @@ public class BluetoothConnection{
             Log.d(TAG, "...Connection established and data link opened...");
             outStream = btSocket.getOutputStream();
             inStream = btSocket.getInputStream();
-        } catch (IOException e) {
+        } catch (Exception e) {
             try {
                 btSocket.close();
-            } catch (IOException e2) {
+            } catch (Exception e2) {
                // Exit("In onResume() and unable to close socket during connection failure" + e2.getMessage() + ".");
             }
            // mHandler.postDelayed(this, 1000);
